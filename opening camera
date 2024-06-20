@@ -3,13 +3,16 @@ import cv2
 # Indicate which camera you will be using (0 represents laptop camera) and start the video capture
 cap = cv2.VideoCapture(0)
 
-# 
-while True: #loop to show camera video
-    ret, frame = cap.read() #cap.read() captures one frame, ret tells you if the capture worked
+# Create a loop to display the camera video
+while True:
+    # Capture one frame; ret is a bool telling you if the capture worked or not
+    ret, frame = cap.read()
 
-    cv2.imshow('frame', frame) #displays camera frames
-    if cv2.waitKey(1) == ord('x'): #waits 1 milisecond for you to press 'x'
-        break #stops capturing frames
+    # Display the frame
+    cv2.imshow('frame', frame)
+    if cv2.waitKey(1) == ord('x'):
+        break
 
-cap.release() #stops using the camera
-cv2.destroyAllWindows #closes the window that popped up
+# Stop using the camera and release the pop-up window
+cap.release()
+cv2.destroyAllWindows
