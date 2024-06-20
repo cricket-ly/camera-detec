@@ -1,15 +1,11 @@
-"""NOTE: make sure to have the latest version of numpy and opencv-python"""
-
+# Import libraries
 import cv2
 
-# Choose a specific dictionary of ArUco markers
-desired_aruco_dictionary = "DICT_4X4_1000"
+# Choose the specific type of ArUco markers you want to detect in the " "
+desired_aruco_dictionary = "DICT_4X4_50"
 
 # The different ArUco dictionaries built into the OpenCV library.
-#(The value maps to a specific constant, which corresponds to
-# a specific predefined dictionary of AruCo markers.)
-""""NOTE: Original ArUco dictionary doesn't seem to work
-"""
+# Dict. value maps to a constant, which corresponds to a ArUco dictionary of the markers
 ARUCO_DICT = {
     "DICT_4X4_50": cv2.aruco.DICT_4X4_50,
     "DICT_4X4_100": cv2.aruco.DICT_4X4_100,
@@ -39,7 +35,7 @@ def main():
         print("[INFO] ArUCo tag of '{}' is not supported".format(desired_aruco_dictionary))
         cv2.sys.exit(0)
 
-    # Load the ArUco dictionary
+    # Load the ArUco dictionary and determine the markers' parameters
     print("[INFO] detecting '{}' markers...".format(desired_aruco_dictionary))
     this_aruco_dictionary = cv2.aruco.getPredefinedDictionary(ARUCO_DICT[desired_aruco_dictionary])
     this_aruco_parameters = cv2.aruco.DetectorParameters()
@@ -47,6 +43,7 @@ def main():
     # Start the video stream
     cap = cv2.VideoCapture(0)
 
+    # Create loop to show the camera video and ArUco markers detected
     while(True):
         # Capture frame-by-frame
         ret, frame = cap.read()
