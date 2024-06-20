@@ -2,9 +2,14 @@
 
 import cv2
 
-desired_aruco_dictionary = "DICT_ARUCO_ORIGINAL"
+# Choose a specific dictionary of ArUco markers
+desired_aruco_dictionary = "DICT_4X4_1000"
 
 # The different ArUco dictionaries built into the OpenCV library.
+#(The value maps to a specific constant, which corresponds to
+# a specific predefined dictionary of AruCo markers.)
+""""NOTE: Original ArUco dictionary doesn't seem to work
+"""
 ARUCO_DICT = {
     "DICT_4X4_50": cv2.aruco.DICT_4X4_50,
     "DICT_4X4_100": cv2.aruco.DICT_4X4_100,
