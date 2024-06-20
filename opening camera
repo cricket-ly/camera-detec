@@ -1,7 +1,9 @@
 import cv2
 
-cap = cv2.VideoCapture(0) #0 represents we're using the laptop camera
+# Indicate which camera you will be using (0 represents laptop camera) and start the video capture
+cap = cv2.VideoCapture(0)
 
+# 
 while True: #loop to show camera video
     ret, frame = cap.read() #cap.read() captures one frame, ret tells you if the capture worked
 
