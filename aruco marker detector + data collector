@@ -70,15 +70,18 @@ def main():
         (corners, ids, rejected) = cv2.aruco.detectMarkers(
             frame, this_aruco_dictionary, parameters=this_aruco_parameters)
 
+        # Initialize dictionary to keep track of the Marker IDs and the center position
+        data = {}
+
+        # Initialize list to keep track of each ArUco positions
+        position = []
+
         # Check that at least one ArUco marker was detected
         if ids is not None:
             # Flatten the ArUco IDs list
             ids = ids.flatten()
             # Initialize dictionary to keep track of the Marker IDs and the center position
-            data = {"Marker ID": ids}
-
-            # Initialize list to keep track of each ArUco positions
-            position = []
+            data["Marker ID"] = ids
 
             # Loop over the detected ArUco corners
             for (marker_corner, marker_id) in zip(corners, ids):
@@ -130,8 +133,5 @@ def main():
     cap.release()
     cv2.destroyAllWindows()
 
-if __name == '__view_camera__':
-  view_camera()
-
-if __name__ == '__main__':
-    main()
+view_camera()
+main()
