@@ -25,29 +25,9 @@ ARUCO_DICT = {
     "DICT_ARUCO_ORIGINAL": cv2.aruco.DICT_ARUCO_ORIGINAL
 }
 
-def view_camera():
-    """To check the camera is the correct one and that ArUcos are in frame"""
-    # Start the video stream.
-    cap = cv2.VideoCapture(1)
-
-    while(True):
-        # Capture frame-by-frame
-        ret, frame = cap.read()
-
-        # Display the resulting frame
-        cv2.imshow('frame', frame)
-
-        # If "q" is pressed on the keyboard, exit this loop
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
-    # Close down the video stream
-    cap.release()
-    cv2.destroyAllWindows()
-
 def main():
     """
-    Main method of the program which detects and records information from ArUco.
+    Main method of the program.
     """
     # Check that we have a valid ArUco marker
     if ARUCO_DICT.get(desired_aruco_dictionary, None) is None:
@@ -70,18 +50,16 @@ def main():
         (corners, ids, rejected) = cv2.aruco.detectMarkers(
             frame, this_aruco_dictionary, parameters=this_aruco_parameters)
 
-        # Initialize dictionary to keep track of the Marker IDs and the center position
-        data = {}
-
-        # Initialize list to keep track of each ArUco positions
-        position = []
-
         # Check that at least one ArUco marker was detected
         if ids is not None:
             # Flatten the ArUco IDs list
             ids = ids.flatten()
             # Initialize dictionary to keep track of the Marker IDs and the center position
-            data["Marker ID"] = ids
+            data = {"Marker ID": ids}
+
+            # Initialize list to keep track of each ArUco positions
+            position = []
+            #rotation = []  commented out because not used here
 
             # Loop over the detected ArUco corners
             for (marker_corner, marker_id) in zip(corners, ids):
@@ -119,20 +97,18 @@ def main():
         # Display the resulting frame
         cv2.imshow('frame', frame)
 
-        # If "q" is pressed on the keyboard, exit this loop
-        # Waitkey set to 3000 miliseconds so there's not a continuous stream of positions recorded
-        if cv2.waitKey(3000) & 0xFF == ord('q'):
-            break
-
         # Relay the recorded information
         data["Position"] = position
         df = pd.DataFrame(data)
         print(df)
 
+        # If "q" is pressed on the keyboard, exit this loop
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
     # Close down the video stream
     cap.release()
     cv2.destroyAllWindows()
 
-if __name__ == "__main__":
-    view_camera()
+if __name__ == '__main__':
     main()
