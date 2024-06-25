@@ -29,6 +29,26 @@ def main():
     """
     Main method of the program, which detects and records info from ArUco markers.
     """
+    # Create a dictionary with the center positions of the grid
+    grid_position_dict = {
+        0: (167, 185),
+        1:	(229, 183),
+        2:	(290, 180),
+        3:	(351, 177),
+        4:	(170, 250),
+        5:	(232, 247),
+        6:	(293, 244),
+        7:	(354, 242),
+        8:	(174, 315),
+        9:	(235, 312),
+        10:	(296, 309),
+        11:	(357, 306),
+        12:	(177, 379),
+        13:	(238, 376),
+        14:	(299, 373),
+        15:	(360, 370)
+        }
+
     # Check that we have a valid ArUco marker dictionary.
     if ARUCO_DICT.get(desired_aruco_dictionary, None) is None:
         print("[INFO] The ArUCo tag of '{}' is not supported".format(desired_aruco_dictionary))
@@ -40,7 +60,7 @@ def main():
     this_aruco_parameters = cv2.aruco.DetectorParameters()
 
     # Start the video stream
-    cap = cv2.VideoCapture(1)
+    cap = cv2.VideoCapture(0)
 
     while(True):
         # Capture frame-by-frame
@@ -55,11 +75,8 @@ def main():
             # Flatten the ArUco IDs list
             ids = ids.flatten()
 
-            # Initialize dictionary to keep track of the Marker IDs and the center position
-            data = {"Marker ID": ids}
-
-            # Initialize list to keep track of each ArUco positions
-            position = []
+            # Initialize a list to track (Marker ID, Coordinate)
+            detected = []
 
             # Loop over the detected ArUco corners
             for (marker_corner, marker_id) in zip(corners, ids):
@@ -84,8 +101,8 @@ def main():
                 center_y = int((top_left[1] + bottom_right[1]) / 2.0)
                 cv2.circle(frame, (center_x, center_y), 4, (0, 0, 255), -1)
 
-                # Save the center value of the ArUco marker in our list
-                position.append((center_x,center_y))
+                # Record the ArUco marker and position coordinate
+                detected.append(( marker_id, (center_x,center_y) ))
 
                 # Draw the ArUco marker ID on the video frame
                 # The ID is always located at the top_left of the ArUco marker
@@ -94,16 +111,58 @@ def main():
                             cv2.FONT_HERSHEY_SIMPLEX,
                             0.5, (0, 255, 0), 2)
 
+        # Uncomment to see what is being detected
+        # print(f"Detected: {detected}")
+
         # Display the resulting frame
         cv2.imshow('frame', frame)
 
-        # Relay the recorded information
-        data["Position"] = position
+        # Go through detected and create new lists which are sorted to correspond to the grid
+        sorted_markers = []
+        sorted_positions = []
+
+        # Leeway is how many pixels away from the center coordiate a point can be
+        leeway = 20
+
+        # Each v1 is a tuple (x, y) of the correct center position
+        for k1, v1 in list(grid_position_dict.items()):
+            found_flag = False
+            lower_bound = (v1[0] - leeway, v1[1] - leeway)
+            upper_bound = (v1[0] + leeway, v1[1] + leeway)
+
+            # Go through our detected data and see if any of the center positions match
+            for elem in detected: #elem is, for example, ( 1, (x,y) )
+                k2 = elem[0] # ArUco marker ID
+                v2 = elem[1] # Position coordinate
+                # If the center position is in range, add the marker ID and the sorted position
+                if lower_bound[0] <= v2[0] <= upper_bound[0] and lower_bound[1] <= v2[1] <= upper_bound[1]:
+                    sorted_markers.append(k2)
+                    sorted_positions.append(v2)
+                    found_flag = True
+                    break
+
+            # If position is not in range, then append to the marker ID 'None', position 'None'
+            if found_flag == False:
+                sorted_markers.append('None')
+                sorted_positions.append('None')
+
+        # These two for loops should give us sorted_markers and sorted_positions list
+        # where everything is in the correct order  as seen in the grid
+
+        # To turn a dictionary into a dataframe, we need it in this format:
+        # Marker ID: [list]
+        # Position: [list]
+        data = {
+            'Marker ID': sorted_markers,
+            'Position': sorted_positions
+        }
+
+        # Display the data dictionary as a dataframe
         df = pd.DataFrame(data)
         print(df)
 
         # If "q" is pressed on the keyboard, exit this loop
-        if cv2.waitKey(3000) & 0xFF == ord('q'):
+        if cv2.waitKey(5000) & 0xFF == ord('q'):
             break
 
     # Close down the video stream
