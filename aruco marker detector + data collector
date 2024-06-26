@@ -31,22 +31,22 @@ def main():
     """
     # Create a dictionary with the center positions of the grid
     grid_position_dict = {
-        0: (167, 185),
-        1:	(229, 183),
-        2:	(290, 180),
-        3:	(351, 177),
-        4:	(170, 250),
-        5:	(232, 247),
-        6:	(293, 244),
-        7:	(354, 242),
-        8:	(174, 315),
-        9:	(235, 312),
-        10:	(296, 309),
-        11:	(357, 306),
-        12:	(177, 379),
-        13:	(238, 376),
-        14:	(299, 373),
-        15:	(360, 370)
+        0:	(183, 209),
+        1:	(244, 208),
+        2:	(304, 207),
+        3:	(364, 204),
+        4:	(185, 272),
+        5:	(246, 270),
+        6:	(306, 268),
+        7:	(366, 267),
+        8:	(187, 336),
+        9:	(248, 334),
+        10:	(308, 332),
+        11:	(368, 330),
+        12:	(189, 400),
+        13:	(250, 398),
+        14:	(310, 395),
+        15:	(370, 393)
         }
 
     # Check that we have a valid ArUco marker dictionary.
@@ -70,13 +70,13 @@ def main():
         (corners, ids, rejected) = cv2.aruco.detectMarkers(
             frame, this_aruco_dictionary, parameters=this_aruco_parameters)
 
+        # Initialize a list to track (Marker ID, Coordinate)
+        detected = []
+
         # Check that at least one ArUco marker was detected
         if ids is not None:
             # Flatten the ArUco IDs list
             ids = ids.flatten()
-
-            # Initialize a list to track (Marker ID, Coordinate)
-            detected = []
 
             # Loop over the detected ArUco corners
             for (marker_corner, marker_id) in zip(corners, ids):
@@ -121,14 +121,19 @@ def main():
         sorted_markers = []
         sorted_positions = []
 
-        # Leeway is how many pixels away from the center coordiate a point can be
-        leeway = 20
+        # Determine how many pixels away from the center coordiate a point can be while still being detected
+        leeway = 30
 
         # Each v1 is a tuple (x, y) of the correct center position
         for k1, v1 in list(grid_position_dict.items()):
             found_flag = False
             lower_bound = (v1[0] - leeway, v1[1] - leeway)
             upper_bound = (v1[0] + leeway, v1[1] + leeway)
+
+            # Check if  we have any detected ArUco markers
+            if len(detected) == 0:
+                print("No ArUco markers were detected.")
+                break
 
             # Go through our detected data and see if any of the center positions match
             for elem in detected: #elem is, for example, ( 1, (x,y) )
@@ -146,9 +151,6 @@ def main():
                 sorted_markers.append('None')
                 sorted_positions.append('None')
 
-        # These two for loops should give us sorted_markers and sorted_positions list
-        # where everything is in the correct order  as seen in the grid
-
         # To turn a dictionary into a dataframe, we need it in this format:
         # Marker ID: [list]
         # Position: [list]
@@ -161,7 +163,7 @@ def main():
         df = pd.DataFrame(data)
         print(df)
 
-        # If "q" is pressed on the keyboard, exit this loop
+        # If "q" is pressed on the keyboard within 5 seconds, exit this loop
         if cv2.waitKey(5000) & 0xFF == ord('q'):
             break
 
