@@ -187,54 +187,77 @@ def calibrate(desired_aruco_dictionary):
     rows = get_int_input("Rows: ")
     columns = get_int_input("Columns: ")
 
-    # Detect and isolate the corner markers
-    input("Place markers in the corners of your matrix.\nPress enter once done. ")
-    detected = get_coordinates(desired_aruco_dictionary)
-    corners = []
-    for elem in detected: # elem is (Marker ID,  (x, y) )
-        corners.append(elem[1])
+    # Create a function that will check if there is a valid amount of markers
+    def valid_amount():
+        # Detect the corner markers
+        input("Place markers in the corners of your matrix.\nPress enter once done. ")
+        detected = get_coordinates(desired_aruco_dictionary)
 
-    # Verify that there are only 4 corners
-    if len(corners) != 4:
-        print("[INFO] Detected invalid amount of markers. Re-try and place 4 markers.")
-        calibrate(desired_aruco_dictionary)
+        # Check if amount detected == 4
+        if len(detected) != 4:
+            print(f"[INFO] Detected {len(detected)} markers. Re-try and place 4 markers.")
+            detected = valid_amount()
 
-    # Sort the tuple in ascending order
-    corners = sorted(corners)   # [(x0,y0), (x1,y1), (x2,y2), (x3,x3)]
+        return detected
 
-    # First two in list should be leftmost, last two in list should be rightmost
-    bottom_R = corners[3]
-    top_R = corners[2]
-    bottom_L = corners[1]
-    top_L = corners[0]
+    detected = valid_amount()
+
+    # Isolate the corner coordinates and sort them
+    def sorting(detected):
+        corners = []
+        for elem in detected: # elem is (Marker ID,  (x, y) )
+            corners.append(elem[1])
+        corners = sorted(corners)   # [(x0,y0), (x1,y1), (x2,y2), (x3,x3)]
+        return corners
+
+    corners = sorting(detected)
+
+    def check_alignment(corners):
+        """Checks if the corners are in a rectangle.
+
+        Returns top_L, top_R, bottom_L, and bottom_R."""
+        # First two in list should be leftmost, last two in list should be rightmost
+        bottom_R = corners[3]
+        top_R = corners[2]
+        bottom_L = corners[1]
+        top_L = corners[0]
+
+        # Check the x's are aligned
+        if not bottom_L[0] - leeway < top_L[0] < bottom_L[0] + leeway:
+            print("[INFO1] Matrix is not in rectangle shape. Fix position of camera or markers.")
+            detected = valid_amount()
+            corners = sorting(detected)
+            (top_L, top_R, bottom_L, bottom_R) = check_alignment(corners)
+
+        if not top_R[0] - leeway < bottom_R[0] < top_R[0] + leeway:
+            print("[INFO2] Matrix is not in rectangle shape. Fix position of camera or markers.")
+            detected = valid_amount()
+            corners = sorting(detected)
+            (top_L, top_R, bottom_L, bottom_R) = check_alignment(corners)
+
+        # Check the y's are aligned
+        if not top_R[1] - leeway < top_L[1] < top_R[1] + leeway:
+            print("[INFO3] Matrix is not in rectangle shape. Fix position of camera or markers.")
+            detected = valid_amount()
+            corners = sorting(detected)
+            (top_L, top_R, bottom_L, bottom_R) = check_alignment(corners)
+
+        if not bottom_L[1] - leeway < bottom_R[1] < bottom_L[1] + leeway:
+            print("[INFO4] Matrix is not in rectangle shape. Fix position of camera or markers.")
+            detected = valid_amount()
+            corners = sorting(detected)
+            (top_L, top_R, bottom_L, bottom_R) = check_alignment(corners)
+
+        return (top_L, top_R, bottom_L, bottom_R)
 
     # Check that the markers are in a rectangle-ish shape
     leeway = 20
-
-    # Check the x's are aligned
-    if not bottom_L[0] - leeway < top_L[0] < bottom_L[0] + leeway:
-        print("[INFO1] Matrix is not in rectangle shape. Fix position of camera or markers.")
-        calibrate(desired_aruco_dictionary)
-    if not top_R[0] - leeway < bottom_R[0] < top_R[0] + leeway:
-        print("[INFO2] Matrix is not in rectangle shape. Fix position of camera or markers.")
-        calibrate(desired_aruco_dictionary)
-
-    # Check the y's are aligned
-    if not top_R[1] - leeway < top_L[1] < top_R[1] + leeway:
-        print("[INFO3] Matrix is not in rectangle shape. Fix position of camera or markers.")
-        calibrate(desired_aruco_dictionary)
-    if not bottom_L[1] - leeway < bottom_R[1] < bottom_L[1] + leeway:
-        print("[INFO4] Matrix is not in rectangle shape. Fix position of camera or markers.")
-        calibrate(desired_aruco_dictionary)
-
-    print("Corners successfully detected.")
+    (top_L, top_R, bottom_L, bottom_R) = check_alignment(corners)
 
     # Create matrix using these four corner points, generating the other center points
-    print("Generating grid points...")
     matrix = generate_matrix(top_L, top_R, bottom_L, bottom_R, rows, columns)
     grid_dict = matrix_to_dict(matrix, rows, columns)
-
-    print("Grid successfully calibrated.")
+    print("Camera successfully calibrated.")
 
     #print(grid_dict)
     return grid_dict
