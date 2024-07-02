@@ -1,9 +1,11 @@
 import cv2
 import pandas as pd
 import numpy as np
+import msvcrt
 
-# Choose a specific dictionary of ArUco markers
+# Choose a specific dictionary of ArUco markers and the camera index
 desired_aruco_dictionary = "DICT_4X4_50"
+camera = 1
 
 # The different ArUco dictionaries built into the OpenCV library.
 ARUCO_DICT = {
@@ -25,6 +27,7 @@ ARUCO_DICT = {
     "DICT_7X7_1000": cv2.aruco.DICT_7X7_1000,
     "DICT_ARUCO_ORIGINAL": cv2.aruco.DICT_ARUCO_ORIGINAL
 }
+
 
 def get_int_input(prompt):
     """ Get an integer input from the user. """
@@ -49,7 +52,7 @@ def get_coordinates(desired_aruco_dictionary):
     this_aruco_parameters = cv2.aruco.DetectorParameters()
 
     # Start the video stream
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(camera)
 
     while(True):
         # Capture frame-by-frame
@@ -100,19 +103,14 @@ def get_coordinates(desired_aruco_dictionary):
                             cv2.FONT_HERSHEY_SIMPLEX,
                             0.5, (0, 255, 0), 2)
 
-        # If no ArUco markers are detected, break
-        if len(detected) == 0:
-                print("No ArUco markers were detected.")
-                break
-
         # Display the resulting frame
         cv2.imshow('frame', frame)
 
-        # Display the detected
+        ## Display the detected
         # print(f"Detected: {detected}")
 
-        # If "q" is pressed on the keyboard within 5 seconds, exit this loop
-        if cv2.waitKey(5000) & 0xFF == ord('q'):
+        # If "q" is pressed on the keyboard, exit this loop
+        if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
     # Close down the video stream
@@ -175,31 +173,31 @@ def matrix_to_dict(matrix, rows, columns):
 
     return grid_dict
 
+
 def calibrate(desired_aruco_dictionary):
-    """Calibrates the camera and determines the matrix size of ArUco markers to detect.
+    """Calibrates the camera and determines the matrix grid size of ArUco markers to detect.
 
     Parameter is a STRING which is the name of the desired ArUco dictionary.
 
-    Returns a DICT with the center positions of each point in the matrix.
+    Returns a DICT with the center positions of each point in the matrix grid.
     """
     # Ask for user input on what size matrix they want to look for
-    print("[INFO] Calibrating camera to detect '{}' markers...".format(desired_aruco_dictionary))
+    print("Calibrating camera to detect '{}' markers...".format(desired_aruco_dictionary))
     rows = get_int_input("Rows: ")
     columns = get_int_input("Columns: ")
 
     # Create a function that will check if there is a valid amount of markers
     def valid_amount():
         # Detect the corner markers
-        input("Place markers in the corners of your matrix.\nPress enter once done. ")
+        input("Place markers in the corners of your matrix. Press enter once done. ")
         detected = get_coordinates(desired_aruco_dictionary)
 
         # Check if amount detected == 4
         if len(detected) != 4:
-            print(f"[INFO] Detected {len(detected)} markers. Re-try and place 4 markers.")
+            print(f"Detected {len(detected)} markers. Re-try and place 4 markers.")
             detected = valid_amount()
 
         return detected
-
     detected = valid_amount()
 
     # Isolate the corner coordinates and sort them
@@ -208,15 +206,19 @@ def calibrate(desired_aruco_dictionary):
         for elem in detected: # elem is (Marker ID,  (x, y) )
             corners.append(elem[1])
         corners = sorted(corners)   # [(x0,y0), (x1,y1), (x2,y2), (x3,x3)]
+        """NOTE: This is an issue when we have warping. This is not always true
+        """
         return corners
-
     corners = sorting(detected)
 
+    # Check that the markers are in a rectangle-ish shape
     def check_alignment(corners):
         """Checks if the corners are in a rectangle.
 
         Returns top_L, top_R, bottom_L, and bottom_R."""
         # First two in list should be leftmost, last two in list should be rightmost
+        """NOTE: This is an issue when we have warping. This is not always true
+        """
         bottom_R = corners[3]
         top_R = corners[2]
         bottom_L = corners[1]
@@ -224,34 +226,32 @@ def calibrate(desired_aruco_dictionary):
 
         # Check the x's are aligned
         if not bottom_L[0] - leeway < top_L[0] < bottom_L[0] + leeway:
-            print("[INFO1] Matrix is not in rectangle shape. Fix position of camera or markers.")
+            print("[1] Matrix is not in rectangle shape. Fix position of camera or markers.")
             detected = valid_amount()
             corners = sorting(detected)
             (top_L, top_R, bottom_L, bottom_R) = check_alignment(corners)
 
         if not top_R[0] - leeway < bottom_R[0] < top_R[0] + leeway:
-            print("[INFO2] Matrix is not in rectangle shape. Fix position of camera or markers.")
+            print("[2] Matrix is not in rectangle shape. Fix position of camera or markers.")
             detected = valid_amount()
             corners = sorting(detected)
             (top_L, top_R, bottom_L, bottom_R) = check_alignment(corners)
 
         # Check the y's are aligned
         if not top_R[1] - leeway < top_L[1] < top_R[1] + leeway:
-            print("[INFO3] Matrix is not in rectangle shape. Fix position of camera or markers.")
+            print("[3] Matrix is not in rectangle shape. Fix position of camera or markers.")
             detected = valid_amount()
             corners = sorting(detected)
             (top_L, top_R, bottom_L, bottom_R) = check_alignment(corners)
 
         if not bottom_L[1] - leeway < bottom_R[1] < bottom_L[1] + leeway:
-            print("[INFO4] Matrix is not in rectangle shape. Fix position of camera or markers.")
+            print("[4] Matrix is not in rectangle shape. Fix position of camera or markers.")
             detected = valid_amount()
             corners = sorting(detected)
             (top_L, top_R, bottom_L, bottom_R) = check_alignment(corners)
 
         return (top_L, top_R, bottom_L, bottom_R)
-
-    # Check that the markers are in a rectangle-ish shape
-    leeway = 20
+    leeway = 40
     (top_L, top_R, bottom_L, bottom_R) = check_alignment(corners)
 
     # Create matrix using these four corner points, generating the other center points
@@ -270,63 +270,181 @@ def main():
     # Create a dictionary with the center positions of the grid
     grid_position_dict = calibrate(desired_aruco_dictionary)
 
+    # Retrieve the necessary information
+    this_aruco_dictionary = cv2.aruco.getPredefinedDictionary(ARUCO_DICT[desired_aruco_dictionary])
+    this_aruco_parameters = cv2.aruco.DetectorParameters()
+
+    # Initialize variable to keep track of previous dataframes
+    old_output = (None, (None, None))
+
+    input("Place your markers on the grid. Press enter once done. ")
+    while True:
+        # Helper function 1: sorts through list of [ marker ID, (x, y) ] and matches them to grid
+        def sort_data(detected):
+            """This sorts through detected markers and determines if it's actually in
+            the correct center position of the grid (for ONE frame)
+
+            Parameter is non-empty LIST of [ marker ID, (x, y)]
+
+            Returns a DICT of {"Marker ID": [], "Position": []}, sorted_markers, sorted_positions"""
+
+            # Create new lists which will correspond to the correct grid positions
+            sorted_markers = []
+            sorted_positions = []
+
+            # Determine how many pixels away from the center coordiate a point can be while still being detected
+            leeway = 20
+
+            # Each v1 is a tuple (x, y) of the correct center position
+            for k1, v1 in list(grid_position_dict.items()):
+                found_flag = False
+                lower_bound = (v1[0] - leeway, v1[1] - leeway)
+                upper_bound = (v1[0] + leeway, v1[1] + leeway)
+
+                if detected != 0:
+                    # Go through our detected data and see if any of the center positions match
+                    for elem in detected: #elem is, for example, ( 1, (x,y) )
+                        k2 = elem[0] # ArUco marker ID
+                        v2 = elem[1] # Position coordinate
+
+                        # If the center position is in range, add the marker ID and the correct center position
+                        if lower_bound[0] <= v2[0] <= upper_bound[0] and lower_bound[1] <= v2[1] <= upper_bound[1]:
+                            sorted_markers.append(k2)
+                            sorted_positions.append(v1)
+                            found_flag = True
+                            break
+
+                # If position is not in range, then append to the marker ID 'None', at which position
+                if found_flag == False:
+                    sorted_markers.append('None')
+                    sorted_positions.append(v1)
+
+            # Return the data as dictionary
+            data = {
+                'Marker ID': sorted_markers,
+                'Coordinate': sorted_positions
+            }
+
+            return data, sorted_markers, sorted_positions
+
+        # Helper function 2: creates a dictionary tracking frequenices
+        terminate_flag = False
+        def get_ten_frames():
+            """ Returns a dictionary matching the frequency of the different markers and positions.
+
+            Key: (tuple(sorted_markers), tuple(sorted_positions)) (TUPLE)
+
+            Value: Frequency (INT)"""
+
+            # Initialize a dictionary to track the frames and repeats, and a counter
+            frames = {}
+            count = 0
+
+            # Start the video stream
+            cap = cv2.VideoCapture(camera)
+
+            # Create a loop to capture 10 frames
+            while count < 10:
+                #print(count)
+
+                # Capture frame
+                ret, frame = cap.read()
+
+                # Detect ArUco markers in the video frame
+                (corners, ids, rejected) = cv2.aruco.detectMarkers(
+                    frame, this_aruco_dictionary, parameters=this_aruco_parameters)
+
+                detected = []
+
+                # Check that at least one ArUco marker was detected
+                if ids is not None:
+                    # Flatten the ArUco IDs list
+                    ids = ids.flatten()
+
+                    # Loop over the detected ArUco corners
+                    for (marker_corner, marker_id) in zip(corners, ids):
+                        # Extract the marker corners
+                        corners = marker_corner.reshape((4, 2))
+                        (top_left, top_right, bottom_right, bottom_left) = corners
+
+                        # Convert the (x,y) coordinate pairs to integers
+                        top_right = (int(top_right[0]), int(top_right[1]))
+                        bottom_right = (int(bottom_right[0]), int(bottom_right[1]))
+                        bottom_left = (int(bottom_left[0]), int(bottom_left[1]))
+                        top_left = (int(top_left[0]), int(top_left[1]))
+
+                        # Calculate the center of the ArUco marker
+                        center_x = int((top_left[0] + bottom_right[0]) / 2.0)
+                        center_y = int((top_left[1] + bottom_right[1]) / 2.0)
+
+                        # Record the ArUco marker and position coordinate
+                        detected.append( (int(marker_id), (center_x,center_y)) )
+
+                # If no ArUco markers are detected, don't need to do anything
+                count += 1
+
+                # With the list of (Marker ID, coordinates), we can apply sort_data()
+                datadict, sorted_markers, sorted_positions = sort_data(detected)
+                datatuple = (tuple(sorted_markers), tuple(sorted_positions))
+
+                # Track them in the dictionary, mapping Tuple: Frequency
+                if datatuple not in list(frames.keys()):
+                    frames[datatuple] = 1
+                else:
+                    frames[datatuple] += 1
+
+                # Stop the loop
+                if msvcrt.kbhit():
+                    key = msvcrt.getch().decode()
+                    if key == 'q':
+                        cap.release()
+                        terminate_flag = True
+                        print("Loop terminated by user.")
+                        cv2.sys.exit(0)
+
+            # Close down the video stream
+            cap.release()
+            cv2.destroyAllWindows()
+
+            # Return our dictionary
+            return(frames)
+
+        # Capture 10 frames
+        ten_frames = get_ten_frames()
+        output = (None, (None, None))
+
+        # Check if loop is broken
+        if terminate_flag == True:
+            cv2.sys.exit(0)
+
+        else:
+            # First, if there are more than 5 unique keys, then not possible for frame to appear at least 6 times
+            if len(list(ten_frames.keys())) > 5:
+                pass
+
+            # Frame could have appeared > 6 times, so try finding it
+            else:
+                for k,v in list(ten_frames.items()):
+                    if v > 5: # frame appeared at least 6 times
+                        output = k # save the tuple of the ( [Marker IDs], [coordinates]) to output
+
+            # Check if this is the same as the old
+            if output != old_output: # if the output is different, display new output as dataframe
+                # output is ( [1,2,3], [(x,y), (x,y), (x,y)])
+                data = {"Marker ID": output[0],
+                        "Coordinate": output[1]}
+                df = pd.DataFrame(data)
+                print("-------------------------")
+                print(df)
+
+            old_output = output
+
+
+if __name__ == '__main__':
     # Check that we have a valid ArUco marker dictionary.
     if ARUCO_DICT.get(desired_aruco_dictionary, None) is None:
         print("[INFO] The ArUCo tag of '{}' is not supported".format(desired_aruco_dictionary))
         cv2.sys.exit(0)
 
-    # Get the center coordinates of the ArUco markers
-    input("Place your markers on the grid. Press enter once done. ")
-    print("[INFO] Currently detecting '{}' markers...".format(desired_aruco_dictionary))
-    detected = get_coordinates(desired_aruco_dictionary)
-
-    # Go through detected and create new lists which will correspond to the grid
-    sorted_markers = []
-    sorted_positions = []
-
-    # Determine how many pixels away from the center coordiate a point can be while still being detected
-    leeway = 20
-
-    # Each v1 is a tuple (x, y) of the correct center position
-    for k1, v1 in list(grid_position_dict.items()):
-        found_flag = False
-        lower_bound = (v1[0] - leeway, v1[1] - leeway)
-        upper_bound = (v1[0] + leeway, v1[1] + leeway)
-
-        # Check if  we have any detected ArUco markers
-        if len(detected) == 0:
-            print("No ArUco markers were detected.")
-            break
-
-        # Go through our detected data and see if any of the center positions match
-        for elem in detected: #elem is, for example, ( 1, (x,y) )
-            k2 = elem[0] # ArUco marker ID
-            v2 = elem[1] # Position coordinate
-
-            # If the center position is in range, add the marker ID and the sorted position
-            if lower_bound[0] <= v2[0] <= upper_bound[0] and lower_bound[1] <= v2[1] <= upper_bound[1]:
-                sorted_markers.append(k2)
-                sorted_positions.append(v2)
-                found_flag = True
-                break
-
-        # If position is not in range, then append to the marker ID 'None', position 'None'
-        if found_flag == False:
-            sorted_markers.append('None')
-            sorted_positions.append('None')
-
-    # To turn a dictionary into a dataframe, we need it in this format:
-    # Marker ID: [list]
-    # Position: [list]
-    data = {
-        'Marker ID': sorted_markers,
-        'Coordinate': sorted_positions
-    }
-
-    # Display the data dictionary as a dataframe
-    df = pd.DataFrame(data)
-    print(df)
-
-if __name__ == '__main__':
+    # Detect the markers
     main()
-    #calibrate(desired_aruco_dictionary)
