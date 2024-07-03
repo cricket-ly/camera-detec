@@ -2,6 +2,8 @@ import cv2
 import pandas as pd
 import numpy as np
 import msvcrt
+import pickle
+
 
 # Choose a specific dictionary of ArUco markers and the camera index
 desired_aruco_dictionary = "DICT_4X4_50"
@@ -57,6 +59,8 @@ def get_coordinates(desired_aruco_dictionary):
     while(True):
         # Capture frame-by-frame
         ret, frame = cap.read()
+
+        frame = unwarping(frame)
 
         # Detect ArUco markers in the video frame
         (corners, ids, rejected) = cv2.aruco.detectMarkers(
@@ -174,6 +178,40 @@ def matrix_to_dict(matrix, rows, columns):
     return grid_dict
 
 
+def unwarping(frame):
+    """Unwarps a frame (object of type NumPy array) and returns the new, unwarped frame."""
+    # Load the camera calibration result from the saved files
+    with open("cameraMatrix.pkl", "rb") as f:
+        cameraMatrix = pickle.load(f)
+    with open("dist.pkl", "rb") as f:
+        dist = pickle.load(f)
+
+    # Read the frame that we want undistorted
+    """Need to think about what parameters we want here"""
+    #img = cv2.imread('images/img1.png')
+    img = frame
+    # if img is None:
+    #     print("Failed to load image.")
+    # else:
+    h, w = img.shape[:2]
+
+    # Compute the new camera matrix and undistort the image
+    newCameraMatrix, roi = cv2.getOptimalNewCameraMatrix(cameraMatrix, dist, (w, h), 1, (w, h))
+    dst = cv2.undistort(img, cameraMatrix, dist, None, newCameraMatrix)
+
+    # Crop the image (if necessary)
+    x, y, w, h = roi
+    dst = dst[y:y + h, x:x + w]
+
+    # Display the undistorted image
+    """Also need to fix the parameters here"""
+    #cv2.imwrite('caliResult1.png', dst)
+    #print("Undistorted image saved as 'caliResult1.png'.")
+
+    return dst
+
+
+
 def calibrate(desired_aruco_dictionary):
     """Calibrates the camera and determines the matrix grid size of ArUco markers to detect.
 
@@ -217,12 +255,23 @@ def calibrate(desired_aruco_dictionary):
 
         Returns top_L, top_R, bottom_L, and bottom_R."""
         # First two in list should be leftmost, last two in list should be rightmost
-        """NOTE: This is an issue when we have warping. This is not always true
-        """
-        bottom_R = corners[3]
-        top_R = corners[2]
-        bottom_L = corners[1]
-        top_L = corners[0]
+        leftA, leftB = ( corners[0], corners[1] )
+        rightA, rightB = ( corners[2], corners[3] )
+
+        # Determine which ones are the top left, top right, bottom left, and bottom right
+        if leftA[1] < leftB[1]:
+            top_L = leftA
+            bottom_L = leftB
+        else:
+            top_L = leftB
+            bottom_L = leftA
+
+        if rightA[1] < rightB[1]:
+            top_R = rightA
+            bottom_R = rightB
+        else:
+            top_R = rightB
+            bottom_R = rightA
 
         # Check the x's are aligned
         if not bottom_L[0] - leeway < top_L[0] < bottom_L[0] + leeway:
@@ -251,7 +300,7 @@ def calibrate(desired_aruco_dictionary):
             (top_L, top_R, bottom_L, bottom_R) = check_alignment(corners)
 
         return (top_L, top_R, bottom_L, bottom_R)
-    leeway = 40
+    leeway = 20
     (top_L, top_R, bottom_L, bottom_R) = check_alignment(corners)
 
     # Create matrix using these four corner points, generating the other center points
@@ -350,6 +399,8 @@ def main():
                 # Capture frame
                 ret, frame = cap.read()
 
+                frame = unwarping(frame)
+
                 # Detect ArUco markers in the video frame
                 (corners, ids, rejected) = cv2.aruco.detectMarkers(
                     frame, this_aruco_dictionary, parameters=this_aruco_parameters)
@@ -376,12 +427,21 @@ def main():
                         # Calculate the center of the ArUco marker
                         center_x = int((top_left[0] + bottom_right[0]) / 2.0)
                         center_y = int((top_left[1] + bottom_right[1]) / 2.0)
+                        # cv2.circle(frame, (center_x, center_y), 4, (0, 0, 255), -1)
 
                         # Record the ArUco marker and position coordinate
                         detected.append( (int(marker_id), (center_x,center_y)) )
 
+                        # Draw the ArUco marker ID on the video frame
+                        # The ID is always located at the top_left of the ArUco marker
+                        # cv2.putText(frame, str(marker_id),
+                        #     (top_left[0], top_left[1] - 15),
+                        #     cv2.FONT_HERSHEY_SIMPLEX,
+                        #     0.5, (0, 255, 0), 2)
+
                 # If no ArUco markers are detected, don't need to do anything
                 count += 1
+                # cv2.imshow('frame', frame)
 
                 # With the list of (Marker ID, coordinates), we can apply sort_data()
                 datadict, sorted_markers, sorted_positions = sort_data(detected)
@@ -398,13 +458,14 @@ def main():
                     key = msvcrt.getch().decode()
                     if key == 'q':
                         cap.release()
+                        cv2.destroyAllWindows()
                         terminate_flag = True
                         print("Loop terminated by user.")
                         cv2.sys.exit(0)
 
             # Close down the video stream
-            cap.release()
-            cv2.destroyAllWindows()
+            #cap.release()
+            #cv2.destroyAllWindows()
 
             # Return our dictionary
             return(frames)
@@ -443,7 +504,7 @@ def main():
 if __name__ == '__main__':
     # Check that we have a valid ArUco marker dictionary.
     if ARUCO_DICT.get(desired_aruco_dictionary, None) is None:
-        print("[INFO] The ArUCo tag of '{}' is not supported".format(desired_aruco_dictionary))
+        print("ArUCo tag of '{}' is not supported".format(desired_aruco_dictionary))
         cv2.sys.exit(0)
 
     # Detect the markers
