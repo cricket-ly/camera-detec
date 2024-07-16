@@ -1,12 +1,11 @@
 import cv2
 import pandas as pd
 import numpy as np
-import msvcrt
 import pickle
 
 # Choose a specific dictionary of ArUco markers and the camera index
 desired_aruco_dictionary = "DICT_4X4_50"
-camera = 0
+camera = 1
 
 # The different ArUco dictionaries built into the OpenCV library.
 ARUCO_DICT = {
@@ -41,6 +40,59 @@ def get_int_input(prompt):
         except ValueError:
             print("Invalid input. Please enter an integer.")
 
+def detect_markers(frame, this_aruco_dictionary, this_aruco_parameters):
+    """Detects the markers in one frame and draws the marker borders.
+
+    Returns the drawn on frame and a LIST of markers that were detected"""
+    # Detect ArUco markers in the frame
+    (corners, ids, rejected) = cv2.aruco.detectMarkers(
+        frame, this_aruco_dictionary, parameters=this_aruco_parameters)
+
+    # Initialize list of detected markers and their center position
+    detected = []
+
+    # Check that at least one ArUco marker was detected
+    if ids is not None:
+        # Flatten the ArUco IDs list
+        ids = ids.flatten()
+
+        # Loop over the detected ArUco corners
+        for (marker_corner, marker_id) in zip(corners, ids):
+            # Extract the marker corners
+            corners = marker_corner.reshape((4, 2))
+            (top_left, top_right, bottom_right, bottom_left) = corners
+
+            # Convert the (x,y) coordinate pairs to integers
+            top_right = (int(top_right[0]), int(top_right[1]))
+            bottom_right = (int(bottom_right[0]), int(bottom_right[1]))
+            bottom_left = (int(bottom_left[0]), int(bottom_left[1]))
+            top_left = (int(top_left[0]), int(top_left[1]))
+
+            # Draw the bounding box of the ArUco detection
+            cv2.line(frame, top_left, top_right, (0, 255, 0), 2)
+            cv2.line(frame, top_right, bottom_right, (0, 255, 0), 2)
+            cv2.line(frame, bottom_right, bottom_left, (0, 255, 0), 2)
+            cv2.line(frame, bottom_left, top_left, (0, 255, 0), 2)
+
+            # Calculate and draw the center of the ArUco marker
+            center_x = int((top_left[0] + bottom_right[0]) / 2.0)
+            center_y = int((top_left[1] + bottom_right[1]) / 2.0)
+            cv2.circle(frame, (center_x, center_y), 4, (0, 0, 255), -1)
+
+            # Save this Marker ID and center position in our list
+            detected.append( (int(marker_id), (center_x,center_y)) )
+
+            # Draw the ArUco marker ID on the video frame
+            # The ID is always located at the top_left of the ArUco marker
+            cv2.putText(frame, str(marker_id),
+                        (top_left[0], top_left[1] - 15),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5, (0, 255, 0), 2)
+    #else:
+    #    print("[ERROR] During detect_markers(frame), no markers were found.")
+
+    return frame, detected
+
 def get_coordinates(desired_aruco_dictionary):
     """ Gets the center coordinates of the ArUco markers detected.
 
@@ -50,18 +102,12 @@ def get_coordinates(desired_aruco_dictionary):
     this_aruco_dictionary = cv2.aruco.getPredefinedDictionary(ARUCO_DICT[desired_aruco_dictionary])
     this_aruco_parameters = cv2.aruco.DetectorParameters()
 
-    # Change variables of ThresWin
-    this_aruco_parameters.adaptiveThreshWinSizeMin = 5
-    this_aruco_parameters.adaptiveThreshWinSizeMax = 10
-    this_aruco_parameters.adaptiveThreshWinSizeStep = 4
-
     # Start the video stream
     cap = cv2.VideoCapture(camera)
 
     while(True):
         # Capture frame-by-frame
         ret, frame = cap.read()
-
         frame = unwarping(frame)
 
         # Detect ArUco markers in the video frame
@@ -199,8 +245,8 @@ def unwarping(frame):
     dst = cv2.undistort(img, cameraMatrix, dist, None, newCameraMatrix)
 
     # Crop the image (if necessary)
-    x, y, w, h = roi
-    dst = dst[y:y + h, x:x + w]
+    # x, y, w, h = roi
+    # dst = dst[y:y + h, x:x + w]
 
     # Display the undistorted image
     """Also need to fix the parameters here"""
@@ -209,6 +255,10 @@ def unwarping(frame):
 
     return dst
 
+def ThresWin(parameters, min, max, step):
+    parameters.adaptiveThreshWinSizeMin = min
+    parameters.adaptiveThreshWinSizeMax = max
+    parameters.adaptiveThreshWinSizeStep = step
 
 def calibrate(desired_aruco_dictionary):
     """Calibrates the camera and determines the matrix grid size of ArUco markers to detect.
@@ -221,7 +271,9 @@ def calibrate(desired_aruco_dictionary):
     print("Calibrating camera to detect '{}' markers...".format(desired_aruco_dictionary))
     rows = get_int_input("Rows: ")
     columns = get_int_input("Columns: ")
-    input("Place markers in the corners of your matrix. Press enter once done. ")
+
+    # Start the video stream
+    cap = cv2.VideoCapture(camera)
 
     # Create a function that will check if there is a valid amount of markers
     def valid_amount():
@@ -298,7 +350,7 @@ def calibrate(desired_aruco_dictionary):
             (top_L, top_R, bottom_L, bottom_R) = check_alignment(corners)
 
         return (top_L, top_R, bottom_L, bottom_R)
-    leeway = 30
+    leeway = 20
     (top_L, top_R, bottom_L, bottom_R) = check_alignment(corners)
 
     # Create matrix using these four corner points, generating the other center points
@@ -310,7 +362,6 @@ def calibrate(desired_aruco_dictionary):
     print(grid_dict)
     return grid_dict
 
-
 def main():
     """
     Main method of the program, which detects and records info from ArUco markers.
@@ -321,14 +372,14 @@ def main():
 
         Parameter is non-empty LIST of [ marker ID, (x, y)]
 
-        Returns a DICT of {"Marker ID": [], "Position": []}, sorted_markers, sorted_positions"""
+        Returns a LIST of sorted_markers, LIST of sorted_positions"""
 
         # Create new lists which will correspond to the correct grid positions
         sorted_markers = []
         sorted_positions = []
 
         # Determine how many pixels away from the center coordiate a point can be while still being detected
-        leeway = 30
+        leeway = 20
 
         # Each v1 is a tuple (x, y) of the correct center position
         for k1, v1 in list(grid_position_dict.items()):
@@ -354,205 +405,90 @@ def main():
                 sorted_markers.append('None')
                 sorted_positions.append(v1)
 
-        # Return the data as dictionary
-        data = {
-            'Marker ID': sorted_markers,
-            'Coordinate': sorted_positions
-        }
-
-        return data, sorted_markers, sorted_positions
-
-    def get_ten_frames(frame):
-        """ Returns a dictionary matching the frequency of the different markers and positions
-        based on 10 frames.
-
-        Key: (tuple(sorted_markers), tuple(sorted_positions)) (TUPLE)
-
-        Value: Frequency (INT)"""
-
-        # Initialize a dictionary to track the frames and repeats, and a counter
-        frames = {}
-        count = 0
-
-        # Create a loop to capture 10 frames
-        while count < 10:
-            # # Detect ArUco markers in the video frame
-            (corners, ids, rejected) = cv2.aruco.detectMarkers(
-                frame, this_aruco_dictionary, parameters=this_aruco_parameters)
-
-            detected = []
-
-            # Check that at least one ArUco marker was detected
-            if ids is not None:
-                # Flatten the ArUco IDs list
-                ids = ids.flatten()
-
-                # Loop over the detected ArUco corners
-                for (marker_corner, marker_id) in zip(corners, ids):
-                    # Extract the marker corners
-                    corners = marker_corner.reshape((4, 2))
-                    (top_left, top_right, bottom_right, bottom_left) = corners
-
-                    # Convert the (x,y) coordinate pairs to integers
-                    top_right = (int(top_right[0]), int(top_right[1]))
-                    bottom_right = (int(bottom_right[0]), int(bottom_right[1]))
-                    bottom_left = (int(bottom_left[0]), int(bottom_left[1]))
-                    top_left = (int(top_left[0]), int(top_left[1]))
-
-                    # Calculate the center of the ArUco marker
-                    center_x = int((top_left[0] + bottom_right[0]) / 2.0)
-                    center_y = int((top_left[1] + bottom_right[1]) / 2.0)
-                    #cv2.circle(frame, (center_x, center_y), 4, (0, 0, 255), -1)
-
-                    # Record the ArUco marker and position coordinate
-                    detected.append( (int(marker_id), (center_x,center_y)) )
-                    #print(int(marker_id))
-
-                    # Draw the ArUco marker ID on the video frame
-                    # The ID is always located at the top_left of the ArUco marker
-                    cv2.putText(frame, str(marker_id),
-                        (top_left[0], top_left[1] - 15),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5, (0, 255, 0), 2)
-
-                print(f"Frame number {count}:",detected)
-
-            else:
-                print(f"No markers detected. Frame number: {count}")
-
-            # If no ArUco markers are detected, don't need to do anything
-            count += 1
-
-            # With the list of (Marker ID, coordinates), we can apply sort_data()
-            datadict, sorted_markers, sorted_positions = sort_data(detected)
-            datatuple = (tuple(sorted_markers), tuple(sorted_positions))
-
-            # Track them in the dictionary, mapping Tuple: Frequency
-            if datatuple not in list(frames.keys()):
-                frames[datatuple] = 1
-            else:
-                frames[datatuple] += 1
-
-            # Wait for input before going to next frame
-            input("Press enter to continue ")
-
-            # Stop the loop
-            if msvcrt.kbhit():
-                key = msvcrt.getch().decode()
-                if key == 'q':
-                    cap.release()
-                    cv2.destroyAllWindows()
-                    cv2.sys.exit(0)
-
-        # Return our dictionary
-        return(frames)
-
-    # Create a dictionary with the center positions of the grid
-    grid_position_dict = calibrate(desired_aruco_dictionary)
-
+        # Return the sorted lists
+        return sorted_markers, sorted_positions
     # Retrieve the necessary information
     this_aruco_dictionary = cv2.aruco.getPredefinedDictionary(ARUCO_DICT[desired_aruco_dictionary])
     this_aruco_parameters = cv2.aruco.DetectorParameters()
 
-    # Change variables of ThresWin
-    this_aruco_parameters.adaptiveThreshWinSizeMin = 5
-    this_aruco_parameters.adaptiveThreshWinSizeMax = 10
-    this_aruco_parameters.adaptiveThreshWinSizeStep = 4
+    # Change camera variables with ThresWin
+    ThresWin(this_aruco_parameters, 5, 10, 4)
+
+    # Create a dictionary with the center positions of the grid
+    grid_position_dict = calibrate(desired_aruco_dictionary)
 
     # Initialize variable to keep track of previous dataframes
     old_output = (None, (None, None))
 
-
-
-
-    # Start video capture
+    # Start the video capture
     input("Place your markers on the grid. Press enter once done. ")
     cap = cv2.VideoCapture(camera)
+
+    # Initialize the dictionary to track frequenices and initialize frame counter
+    freq_dict = {}
+    frame_counter = 1
+
+    # Create while loop to always be displaying frame and detecting markers
     while True:
-        # Capture individual frame and unwarp it
-        ret, frame = cap.read()
-        frame = unwarping(frame)
+        # We collected info from 10 frames --> now let's check
+        if frame_counter == 11:
+            # Check the frequency dictionary for the 6/10 frame markers
+            if len(list(freq_dict.keys())) > 5:
+                # not possible for the same markers to appear in at least 6 frames
+                pass
+            else:
+                for k,v in list(freq_dict.items()):
+                    if v > 5: # frame appeared at least 6 times
+                        output = k # save the tuple of the ( [Marker IDs], [coordinates]) to output
 
-        # # Detect ArUco markers in the video frame
-        # (corners, ids, rejected) = cv2.aruco.detectMarkers(
-        #     frame, this_aruco_dictionary, parameters=this_aruco_parameters)
+            # Check if this is the same as the old
+            if output != old_output: # if the output is different, display new output as dataframe
+                # output is ( [1,2,3], [(x,y), (x,y), (x,y)])
+                data = {"Marker ID": output[0],
+                        "Coordinate": output[1]}
+                df = pd.DataFrame(data)
+                print("-------------------------")
+                print(df)
 
-        # # Check that at least one ArUco marker was detected
-        # if ids is not None:
-        #     # Flatten the ArUco IDs list
-        #     ids = ids.flatten()
+            # Reset everything
+            freq_dict = {}
+            frame_counter = 1
+            old_output = output
 
-        #     # Loop over the detected ArUco corners
-        #     for (marker_corner, marker_id) in zip(corners, ids):
-        #         # Extract the marker corners
-        #         corners = marker_corner.reshape((4, 2))
-        #         (top_left, top_right, bottom_right, bottom_left) = corners
 
-        #         # Convert the (x,y) coordinate pairs to integers
-        #         top_right = (int(top_right[0]), int(top_right[1]))
-        #         bottom_right = (int(bottom_right[0]), int(bottom_right[1]))
-        #         bottom_left = (int(bottom_left[0]), int(bottom_left[1]))
-        #         top_left = (int(top_left[0]), int(top_left[1]))
+        # Collect info from 10 frames
+        else:
+            #print(f"Frame #{frame_counter}")
 
-        #         # Draw the bounding box of the ArUco detection
-        #         cv2.line(frame, top_left, top_right, (0, 255, 0), 2)
-        #         cv2.line(frame, top_right, bottom_right, (0, 255, 0), 2)
-        #         cv2.line(frame, bottom_right, bottom_left, (0, 255, 0), 2)
-        #         cv2.line(frame, bottom_left, top_left, (0, 255, 0), 2)
+            # Capture one frame and unwarp it
+            ret, frame = cap.read()
+            frame = unwarping(frame)
 
-        #         # Calculate and draw the center of the ArUco marker
-        #         center_x = int((top_left[0] + bottom_right[0]) / 2.0)
-        #         center_y = int((top_left[1] + bottom_right[1]) / 2.0)
-        #         cv2.circle(frame, (center_x, center_y), 4, (0, 0, 255), -1)
+            # Detect the markers from one frame
+            frame, detected = detect_markers(frame, this_aruco_dictionary, this_aruco_parameters)
 
-        #         # Draw the ArUco marker ID on the video frame
-        #         # The ID is always located at the top_left of the ArUco marker
-        #         cv2.putText(frame, str(marker_id),
-        #                     (top_left[0], top_left[1] - 15),
-        #                     cv2.FONT_HERSHEY_SIMPLEX,
-        #                     0.5, (0, 255, 0), 2)
+            # Sort the list of detected markers
+            sorted_markers, sorted_positions = sort_data(detected)
+            #print(f"Sorted markers: {sorted_markers}")
+            #print(f"Sorted positions: {sorted_positions}")
 
-        ## Display the resulting frame
+            # With the organized info, add them to the frequency dictionary, mapping Tuple: Frequency
+            datatuple = (tuple(sorted_markers), tuple(sorted_positions))
+
+            if datatuple not in list(freq_dict.keys()):
+                freq_dict[datatuple] = 1
+            else:
+                freq_dict[datatuple] += 1
+
+            # Increase frame count
+            frame_counter += 1
+
+        # Show the frame
         cv2.imshow('frame', frame)
 
-        # If "q" is pressed on the keyboard, exit this loop
-        if cv2.waitKey(5000) & 0xFF == ord('q'):
+        # Create exit button
+        if cv2.waitKey(200) & 0xFF == ord('q'):
             break
-
-        """Maybe we should try just auto printing the data frame. This will show us if it's the 10
-        frames function that doesn't work."""
-        # Use the get_coordinates function
-        # separate the functions so it's easier to check
-        # find the raw input of
-
-        # Show the raw data of the camera detection
-
-
-        # # Capture 10 frames
-        ten_frames = get_ten_frames(frame)
-        output = (None, (None, None))
-
-
-        # First, if there are more than 5 unique keys, then not possible for frame to appear at least 6 times
-        if len(list(ten_frames.keys())) > 5:
-            pass
-
-        # Frame could have appeared > 6 times, so try finding it
-        else:
-            for k,v in list(ten_frames.items()):
-                if v > 5: # frame appeared at least 6 times
-                    output = k # save the tuple of the ( [Marker IDs], [coordinates]) to output
-
-        # Check if this is the same as the old
-        if output != old_output: # if the output is different, display new output as dataframe
-            # output is ( [1,2,3], [(x,y), (x,y), (x,y)])
-            data = {"Marker ID": output[0],
-                    "Coordinate": output[1]}
-            df = pd.DataFrame(data)
-            print("-------------------------")
-            print(df)
-
-        old_output = output
 
 
 if __name__ == '__main__':
