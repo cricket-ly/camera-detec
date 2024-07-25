@@ -2,10 +2,11 @@ import cv2
 import pandas as pd
 import numpy as np
 import pickle
+import os
 
 # Choose a specific dictionary of ArUco markers and the camera index
 desired_aruco_dictionary = "DICT_4X4_50"
-camera = 1
+camera = 0
 
 # The different ArUco dictionaries built into the OpenCV library.
 ARUCO_DICT = {
@@ -105,55 +106,12 @@ def get_coordinates(desired_aruco_dictionary):
     # Start the video stream
     cap = cv2.VideoCapture(camera)
 
-    while(True):
-        # Capture frame-by-frame
+
+    while True:
         ret, frame = cap.read()
         frame = unwarping(frame)
 
-        # Detect ArUco markers in the video frame
-        (corners, ids, rejected) = cv2.aruco.detectMarkers(
-            frame, this_aruco_dictionary, parameters=this_aruco_parameters)
-
-        # Initialize a list to track (Marker ID, Coordinate)
-        detected = []
-
-        # Check that at least one ArUco marker was detected
-        if ids is not None:
-            # Flatten the ArUco IDs list
-            ids = ids.flatten()
-
-            # Loop over the detected ArUco corners
-            for (marker_corner, marker_id) in zip(corners, ids):
-                # Extract the marker corners
-                corners = marker_corner.reshape((4, 2))
-                (top_left, top_right, bottom_right, bottom_left) = corners
-
-                # Convert the (x,y) coordinate pairs to integers
-                top_right = (int(top_right[0]), int(top_right[1]))
-                bottom_right = (int(bottom_right[0]), int(bottom_right[1]))
-                bottom_left = (int(bottom_left[0]), int(bottom_left[1]))
-                top_left = (int(top_left[0]), int(top_left[1]))
-
-                # Draw the bounding box of the ArUco detection
-                cv2.line(frame, top_left, top_right, (0, 255, 0), 2)
-                cv2.line(frame, top_right, bottom_right, (0, 255, 0), 2)
-                cv2.line(frame, bottom_right, bottom_left, (0, 255, 0), 2)
-                cv2.line(frame, bottom_left, top_left, (0, 255, 0), 2)
-
-                # Calculate and draw the center of the ArUco marker
-                center_x = int((top_left[0] + bottom_right[0]) / 2.0)
-                center_y = int((top_left[1] + bottom_right[1]) / 2.0)
-                cv2.circle(frame, (center_x, center_y), 4, (0, 0, 255), -1)
-
-                # Record the ArUco marker and position coordinate
-                detected.append(( int(marker_id), (center_x,center_y) ))
-
-                # Draw the ArUco marker ID on the video frame
-                # The ID is always located at the top_left of the ArUco marker
-                cv2.putText(frame, str(marker_id),
-                            (top_left[0], top_left[1] - 15),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            0.5, (0, 255, 0), 2)
+        frame, detected = detect_markers(frame, this_aruco_dictionary, this_aruco_parameters)
 
         # Display the resulting frame
         cv2.imshow('frame', frame)
@@ -427,6 +385,7 @@ def main():
     # Initialize the dictionary to track frequenices and initialize frame counter
     freq_dict = {}
     frame_counter = 1
+    json_counter = 0
 
     # Create while loop to always be displaying frame and detecting markers
     while True:
@@ -449,6 +408,24 @@ def main():
                 df = pd.DataFrame(data)
                 print("-------------------------")
                 print(df)
+                answer = input("Enter 'Y' to save as json file. Otherwise, just press Enter: ")
+                if not os.path.exists('json_files'):
+                    os.makedirs('json_files')
+                if answer == "Y":
+                    # Store the dataframe in JSON format
+                    file_path = os.path.join('json_files', f'file_{json_counter}.json')
+                    df.to_json(file_path, orient='split', compression='infer', index=True)
+                    print(f"Saved as file_{json_counter}.json")
+
+                    # Read the JSON file (help with debugging)
+                    # try:
+                    #     df_read = pd.read_json(f'file_{json_counter}.json', orient='split', compression='infer')
+                    #     print("Successfully read JSON file:")
+                    #     print(df_read)
+                    # except FileNotFoundError:
+                    #     print(f"Error: file_{json_counter}.json not found")
+
+                    json_counter += 1  # Increment the counter after each file save
 
             # Reset everything
             freq_dict = {}
@@ -489,6 +466,10 @@ def main():
         # Create exit button
         if cv2.waitKey(200) & 0xFF == ord('q'):
             break
+
+    # Close down the video stream
+    cap.release()
+    cv2.destroyAllWindows()
 
 
 if __name__ == '__main__':
