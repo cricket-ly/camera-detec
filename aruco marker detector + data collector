@@ -203,11 +203,10 @@ def unwarping(frame):
     dst = cv2.undistort(img, cameraMatrix, dist, None, newCameraMatrix)
 
     # Crop the image (if necessary)
-    # x, y, w, h = roi
-    # dst = dst[y:y + h, x:x + w]
+    x, y, w, h = roi
+    dst = dst[y:y + h, x:x + w]
 
     # Display the undistorted image
-    """Also need to fix the parameters here"""
     #cv2.imwrite('caliResult1.png', dst)
     #print("Undistorted image saved as 'caliResult1.png'.")
 
