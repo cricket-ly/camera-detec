@@ -1,0 +1,65 @@
+import websockets
+import asyncio
+import json
+
+table_name = "volpe_rd"
+deploy_uri = "wss://cityio.media.mit.edu:443/cityio/interface"
+wss_listen = "{\"type\":\"LISTEN\",\"content\":{\"gridId\":\"" + table_name + "\"}}"
+
+aruco_ids = [35, 38, 34, 17, 7, 43, 6, 4, 8, 10]
+
+async def process_json_files():
+    """This connects to the websocket server and retrieves data from it."""
+    # Connect with the websocket, given by deploy_uri
+    async with websockets.connect(deploy_uri, max_size=2**24, compression="deflate") as websocket:
+        await websocket.send(wss_listen)
+        # Creating default loading files:
+        result_geo = await websocket.recv() #result_geo looks like it is geogrid_features
+        #this is the whole json file of what is CURRENTLY on the table
+
+        print("Data received!")
+
+        datajson = json.loads(result_geo)
+
+        properties = []
+        for item in datajson['content']['GEOGRID']['features']:
+            properties.append(item['properties'])
+
+        print(properties)
+
+        filename = 'properties.json'
+
+        # Write the properties list to the file
+        with open(filename, 'w') as file:
+            json.dump(properties, file, indent=4)
+
+
+
+async def websocket_client():
+    async with websockets.connect(deploy_uri, max_size=2**23, compression="deflate") as websocket:
+        print("Connected to WebSocket server at", deploy_uri)
+        await websocket.send(wss_listen)
+
+        # Open the JSON file of all red/blue codes
+        color = input("Type in 'blue', 'red', or 'original' to change the color of the grid: ")
+        if color == 'blue':
+            file_path = 'all_blues.json'
+        elif color == 'red':
+            file_path = 'all_reds.json'
+        elif color == 'original':
+            file_path = 'properties.json'
+
+        # Read the JSON file
+        with open(file_path, 'r') as file:
+            json_data = json.load(file)
+
+        # Change the volpe table
+        updated_grid = json.dumps({"type":"UPDATE_GRID","content":{"geogriddata":json_data}},separators=(',', ':'))
+        print(f"Changed the table to {color}")
+
+        await websocket.send(updated_grid)
+
+# Run the asynchronous function using asyncio.run
+if __name__ == "__main__":
+    properties = asyncio.run(process_json_files())
+    asyncio.run(websocket_client())
