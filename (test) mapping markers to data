@@ -1,9 +1,11 @@
+import websockets
+import asyncio
 import json
 import os
 
-
+# """NOTE: Should load the JSON files by receiving them(? how to do this) instead of saving the data locally"""
 # Load JSON Files
-with open('json_files/file_0.json', 'r') as f1, open('aruco_codes.json', 'r') as f2:
+with open('json_files/file_1.json', 'r') as f1, open('aruco_codes.json', 'r') as f2:
     data_file = json.load(f1) # These are the markers detected by the camera
     codes_file = json.load(f2) # This is the 'key' mapping aruco codes to info about them
 
@@ -18,6 +20,7 @@ codes = codes_file.get('Codes', {})
 mapped_data = []
 index = 0
 
+
 # Go through each detected aruco marker, "item"
 for item in data:
     aruco_id = item[0] # This is the one we want to check against in the 'keys'
@@ -31,28 +34,29 @@ for item in data:
             color = value['color']
 
             mapped_entry = {
-            'aruco_id': aruco_id,
-            'name': name,
             'color': color,
-            'grid_position': index
-            #'height': height
-        }
+            'height': 1,
+            'id': index,
+            'interactive': True,
+            'name': name
+            }
+
             mapped_data.append(mapped_entry)
             break
 
     index += 1
     #input("Enter")
 
-print(mapped_data)
+#print(mapped_data)
 
 answer = input("Save data? Enter 'Y' or 'N': ")
 if answer == "Y":
     # Store the file
-    file_path = os.path.join('mapped_data', f'data.json')
+    file_path = os.path.join('mapped_data', f'data_1.json')
     json_str = json.dumps(mapped_data, indent=4)
     with open(file_path, 'w') as json_file:
         json_file.write(json_str)
-        print(f"List saved as JSON file: data.json")
+        print(f"List saved as JSON file: data_1.json")
 
 #for entry in mapped_data:
 #    print(entry)
