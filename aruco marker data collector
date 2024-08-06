@@ -3,6 +3,14 @@ import pandas as pd
 import numpy as np
 import pickle
 import os
+import json
+import websockets
+import asyncio
+from mapping_markers import mapping_markers_to_data
+
+table_name = "test"
+deploy_uri = "wss://cityio.media.mit.edu:443/cityio/interface"
+wss_listen = "{\"type\":\"LISTEN\",\"content\":{\"gridId\":\"" + table_name + "\"}}"
 
 # Choose a specific dictionary of ArUco markers and the camera index
 desired_aruco_dictionary = "DICT_4X4_50"
@@ -319,7 +327,42 @@ def calibrate(desired_aruco_dictionary):
     print(grid_dict)
     return grid_dict
 
-def main():
+"""----------------------------"""
+
+async def send_to_websocket(json_data):
+    async with websockets.connect(deploy_uri, max_size=2**24, compression="deflate") as websocket:
+        print("JSON data received:",json_data)
+        await websocket.send(wss_listen)
+
+        # Maybe here, we can use the mapping markers to data function.
+        # This would eliminate the need for the "raw" data type thing we added earlier
+        json_str = mapping_markers_to_data(json_data)
+        print("JSON str:",json_str)
+
+        # Change the table
+        updated_grid = json.dumps({"type":"UPDATE_GRID","content":{"geogriddata":json_str}},separators=(',', ':'))
+        await websocket.send(updated_grid)
+        print("Updated grid:",updated_grid)
+
+        #await websocket.send(json.dumps(json_str))
+        # print("JSON data sent!")
+        # print(f"JSON data: {json.dumps(json_str)}")
+        print("-------------------")
+
+        ####################
+        ## This is just to test if the data is really sent to the websocket or not
+        # # file_path = 'mapped_data/mapped_file_0.json'
+
+        # # with open(file_path, 'r') as file:
+        # #     json_data = json.load(file)
+
+        # # Change the volpe table
+        # updated_grid = json.dumps({"type":"UPDATE_GRID","content":{"geogriddata":json_data}},separators=(',', ':'))
+        # await websocket.send(updated_grid)
+        # print(f"Changed the table!")
+        #####################
+
+async def main_detection():
     """
     Main method of the program, which detects and records info from ArUco markers.
     """
@@ -364,118 +407,134 @@ def main():
 
         # Return the sorted lists
         return sorted_markers, sorted_positions
-    # Retrieve the necessary information
-    this_aruco_dictionary = cv2.aruco.getPredefinedDictionary(ARUCO_DICT[desired_aruco_dictionary])
-    this_aruco_parameters = cv2.aruco.DetectorParameters()
 
-    # Change camera variables with ThresWin
-    ThresWin(this_aruco_parameters, 5, 10, 4)
+    async with websockets.connect(deploy_uri, max_size=2**24, compression="deflate") as websocket:
 
-    # Create a dictionary with the center positions of the grid
-    grid_position_dict = calibrate(desired_aruco_dictionary)
+        # Retrieve the necessary information
+        this_aruco_dictionary = cv2.aruco.getPredefinedDictionary(ARUCO_DICT[desired_aruco_dictionary])
+        this_aruco_parameters = cv2.aruco.DetectorParameters()
 
-    # Initialize variable to keep track of previous dataframes
-    old_output = (None, (None, None))
+        # Change camera variables with ThresWin
+        ThresWin(this_aruco_parameters, 5, 10, 4)
 
-    # Start the video capture
-    input("Place your markers on the grid. Press enter once done. ")
-    cap = cv2.VideoCapture(camera)
+        # Create a dictionary with the center positions of the grid
+        grid_position_dict = calibrate(desired_aruco_dictionary)
 
-    # Initialize the dictionary to track frequenices and initialize frame counter
-    freq_dict = {}
-    frame_counter = 1
-    json_counter = 0
+        # Initialize variable to keep track of previous dataframes
+        old_output = (None, (None, None))
 
-    # Create while loop to always be displaying frame and detecting markers
-    while True:
-        # We collected info from 10 frames --> now let's check
-        if frame_counter == 11:
-            # Check the frequency dictionary for the 6/10 frame markers
-            if len(list(freq_dict.keys())) > 5:
-                # not possible for the same markers to appear in at least 6 frames
-                pass
+        # Start the video capture
+        input("Place your markers on the grid. Press enter once done. ")
+        cap = cv2.VideoCapture(camera)
+
+        # Initialize the dictionary to track frequenices and initialize frame counter
+        freq_dict = {}
+        frame_counter = 1
+        json_counter = 0
+
+        # Create while loop to always be displaying frame and detecting markers
+        while True:
+            # We collected info from 10 frames --> now let's check
+            if frame_counter == 11:
+                # Check the frequency dictionary for the 6/10 frame markers
+                if len(list(freq_dict.keys())) > 5:
+                    # not possible for the same markers to appear in at least 6 frames
+                    pass
+                else:
+                    for k,v in list(freq_dict.items()):
+                        if v > 5: # frame appeared at least 6 times
+                            output = k # save the tuple of the ( [Marker IDs], [coordinates]) to output
+
+                # Check if this is the same as the old
+                if output != old_output: # if the output is different, display new output as dataframe
+                    # output is ( [1,2,3], [(x,y), (x,y), (x,y)])
+                    data = {"Marker ID": output[0],
+                            "Coordinate": output[1]}
+                    # df = pd.DataFrame(data)
+                    # print("-------------------------")
+                    # print(df)
+
+                    """NOTE: So what we would change here is we would add the websocket part,
+                    so that the dataframe is always being sent to the websocket"""
+                    # Prepare the data to be sent
+                    json_data = {"DataType": "raw",
+                                "Data": data}
+
+                    # Send the JSON data to the WebSocket server
+                    await send_to_websocket(json_data)
+
+
+                    ## This part is to help manually save the json file, to be used in mapping it in the other file
+                    # answer = input("Enter 'Y' to save as json file. Otherwise, just press Enter: ")
+                    # if not os.path.exists('raw_data'):
+                    #     os.makedirs('raw_data')
+                    # if answer == "Y":
+                    #     # Define the file path
+                    #     file_path = os.path.join('raw_data', f'file_{json_counter}.json')
+
+                    #     # Prepare the data to be saved in the JSON file
+                    #     json_data = {"DataType": "raw",
+                    #                 "Data": data}
+
+                    #     # Save the JSON data
+                    #     with open(file_path, 'w') as json_file:
+                    #         json.dump(json_data, json_file, indent=4)
+
+                    #     print(f"Saved as file_{json_counter}.json!")
+
+                    #     # Increment the counter after each file save
+                    #     json_counter += 1
+
+                # Reset everything
+                freq_dict = {}
+                frame_counter = 1
+                old_output = output
+                await asyncio.sleep(1)
+
+            # Collect info from 10 frames
             else:
-                for k,v in list(freq_dict.items()):
-                    if v > 5: # frame appeared at least 6 times
-                        output = k # save the tuple of the ( [Marker IDs], [coordinates]) to output
+                #print(f"Frame #{frame_counter}")
 
-            # Check if this is the same as the old
-            if output != old_output: # if the output is different, display new output as dataframe
-                # output is ( [1,2,3], [(x,y), (x,y), (x,y)])
-                data = {"Marker ID": output[0],
-                        "Coordinate": output[1]}
-                df = pd.DataFrame(data)
-                print("-------------------------")
-                print(df)
-                answer = input("Enter 'Y' to save as json file. Otherwise, just press Enter: ")
-                if not os.path.exists('json_files'):
-                    os.makedirs('json_files')
-                if answer == "Y":
-                    # Store the dataframe in JSON format
-                    file_path = os.path.join('json_files', f'file_{json_counter}.json')
-                    df.to_json(file_path, orient='split', compression='infer', index=True)
-                    print(f"Saved as file_{json_counter}.json")
+                # Capture one frame and unwarp it
+                ret, frame = cap.read()
+                frame = unwarping(frame)
 
-                    # Read the JSON file (help with debugging)
-                    # try:
-                    #     df_read = pd.read_json(f'file_{json_counter}.json', orient='split', compression='infer')
-                    #     print("Successfully read JSON file:")
-                    #     print(df_read)
-                    # except FileNotFoundError:
-                    #     print(f"Error: file_{json_counter}.json not found")
+                # Detect the markers from one frame
+                frame, detected = detect_markers(frame, this_aruco_dictionary, this_aruco_parameters)
 
-                    json_counter += 1  # Increment the counter after each file save
+                # Sort the list of detected markers
+                sorted_markers, sorted_positions = sort_data(detected)
+                #print(f"Sorted markers: {sorted_markers}")
+                #print(f"Sorted positions: {sorted_positions}")
 
-            # Reset everything
-            freq_dict = {}
-            frame_counter = 1
-            old_output = output
+                # With the organized info, add them to the frequency dictionary, mapping Tuple: Frequency
+                datatuple = (tuple(sorted_markers), tuple(sorted_positions))
 
+                if datatuple not in list(freq_dict.keys()):
+                    freq_dict[datatuple] = 1
+                else:
+                    freq_dict[datatuple] += 1
 
-        # Collect info from 10 frames
-        else:
-            #print(f"Frame #{frame_counter}")
+                # Increase frame count
+                frame_counter += 1
 
-            # Capture one frame and unwarp it
-            ret, frame = cap.read()
-            frame = unwarping(frame)
+            # Show the frame
+            cv2.imshow('frame', frame)
 
-            # Detect the markers from one frame
-            frame, detected = detect_markers(frame, this_aruco_dictionary, this_aruco_parameters)
+            # Create exit button
+            if cv2.waitKey(200) & 0xFF == ord('q'):
+                break
 
-            # Sort the list of detected markers
-            sorted_markers, sorted_positions = sort_data(detected)
-            #print(f"Sorted markers: {sorted_markers}")
-            #print(f"Sorted positions: {sorted_positions}")
-
-            # With the organized info, add them to the frequency dictionary, mapping Tuple: Frequency
-            datatuple = (tuple(sorted_markers), tuple(sorted_positions))
-
-            if datatuple not in list(freq_dict.keys()):
-                freq_dict[datatuple] = 1
-            else:
-                freq_dict[datatuple] += 1
-
-            # Increase frame count
-            frame_counter += 1
-
-        # Show the frame
-        cv2.imshow('frame', frame)
-
-        # Create exit button
-        if cv2.waitKey(200) & 0xFF == ord('q'):
-            break
-
-    # Close down the video stream
-    cap.release()
-    cv2.destroyAllWindows()
+        # Close down the video stream
+        cap.release()
+        cv2.destroyAllWindows()
 
 
 if __name__ == '__main__':
     # Check that we have a valid ArUco marker dictionary.
-    if ARUCO_DICT.get(desired_aruco_dictionary, None) is None:
-        print("ArUCo tag of '{}' is not supported".format(desired_aruco_dictionary))
-        cv2.sys.exit(0)
+    # if ARUCO_DICT.get(desired_aruco_dictionary, None) is None:
+    #     print("ArUCo tag of '{}' is not supported".format(desired_aruco_dictionary))
+    #     cv2.sys.exit(0)
 
     # Detect the markers
-    main()
+    asyncio.run(main_detection())

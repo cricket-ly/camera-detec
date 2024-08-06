@@ -1,5 +1,4 @@
 import json
-import os
 
 """NOTE: So what we would change here is that we would add a listening part,
 where the json files from the data collector part would be sent THROUGH
@@ -25,8 +24,7 @@ def mapping_markers_to_data(data_file):
     data = data_file.get('Data', [])
     #print(f"Data: {data}")
     markers = data['Marker ID'] # list of IDs
-    print('Markers:',markers)
-    print('------------')
+    #print('Markers:',markers)
 
     codes = codes_file.get('Codes', {})
     #print(f"Codes: {codes}")
