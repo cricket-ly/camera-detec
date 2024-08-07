@@ -60,10 +60,6 @@ def mapping_markers_to_data(data_file):
     return(json_str)
 
 
-# """NOTE: What we would change here is that we would have this be sent to the websocket,
-# -- actually might need to implement the code in the test_python part where it is able
-# to update the color"""
-
 # answer = input("Save data? Enter 'Y' or 'N': ")
 # if answer == "Y":
 #     # Store the file

@@ -24,7 +24,8 @@ def mapping_markers_to_data(data_file):
     data = data_file.get('Data', [])
     #print(f"Data: {data}")
     markers = data['Marker ID'] # list of IDs
-    #print('Markers:',markers)
+    print('Markers:',markers)
+    print('------------')
 
     codes = codes_file.get('Codes', {})
     #print(f"Codes: {codes}")
@@ -35,9 +36,19 @@ def mapping_markers_to_data(data_file):
 
     # Go through each detected aruco marker, "item"
     for each_id in markers: # This is the one we want to check against in the 'keys'
+        if each_id == 'None':
+            #print(f"Aruco ID is {each_id} (NONE FOUND)")
+            mapped_entry = {
+                'color': [0, 0, 0, 0],
+                'height': [1],
+                'id': index,
+                'interactive': True,
+                'name': 'None'
+                }
+            mapped_data.append(mapped_entry)
         for key, value in codes.items():
             if value['aruco_id'] == each_id:
-                #print(f"Aruco ID {aruco_id} is '{key}': {value}")
+                #print(f"Aruco ID {each_id} is '{key}': {value}")
                 name = key
                 color = value['color']
 
