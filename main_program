@@ -1,1 +1,56 @@
-from mapping_markers import mapping_markers_to_data
+# The full process of detecting markers and sending the data to the websocket to update the table.
+
+###############
+# GLOBAL RETRIEVAL
+# 1) Retrieve data from the GLOBAL grid
+# Want to know the global ROWS, COLS, and ORIGINAL PROPERTIES
+    # By properties, we mean the original 'color', 'height', 'id', 'interactive', and 'name'
+    # This is so we have the original data, which we will update portions of later
+
+# 2) Return the global_rows, global_cols, and original_properties
+"""NOTE: this is in the test_python.py"""
+
+
+###############
+# INITIALIZING THE GRID
+# 1) Figure out what portion of the GLOBAL grid we will be updating
+    # Ask which index of the GLOBAL grid is the top left corner of the LOCAL grid
+    # Ask for local_rows, local_cols
+
+# 2) Return a list of integers which represent the GLOBAL indexes that will need to be updated
+
+# 3) Create the grid (matrix of coordinate points that the camera will check for ArUco markers)
+    # Use the local_rows, local_cols from before
+
+# 4) Return the grid of coordinates that the camera will be detecting markers in
+
+"""NOTE: this is in aruco_id_detector.py, with the calibration functions. will need to be updated."""
+
+
+###############
+# DETECTION & MAPPING
+# 1) Detect the markers with the camera
+
+# 2) Map the ArUco markers detected to their properties ('color', 'height', 'id', 'interactive', and 'name')
+
+"""NOTE: this is in aruco_id_detector.py"""
+
+
+###############
+# UPDATING THE GLOBAL GRID
+# We have the information of the markers in from the LOCAL grid. Now we need to update
+# the GLOBAL grid to have this information
+"""NOTE: I think this is in the another_test.py file"""
+
+
+###############
+# SENDING TO WEBSOCKET
+# Note: since we're compiling everything into this main_program file, I think we only need one async
+# 1) Connect to the websocket
+
+# 2) Send the updated GLOBAL grid
+
+
+"""NOTE: check the aruco_id_detector.py; started combining stuff there but will need to
+undo the combining that I did. Basically, separate it so aruco_id_detector only does the
+detecting and mapping."""
