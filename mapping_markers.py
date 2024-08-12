@@ -66,3 +66,9 @@ def mapping_markers_to_data(data_file):
         #input("Enter")
 
     return(mapped_data)
+
+# with open('raw_data/file_0.json', 'r') as f1:
+#     data_file = json.load(f1)
+
+# print(data_file)
+# print(mapping_markers_to_data(data_file))
