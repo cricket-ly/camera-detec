@@ -324,25 +324,26 @@ def calibrate(desired_aruco_dictionary):
     print("Camera successfully calibrated.")
 
     # DEBUGGING CODE
-    print(grid_dict)
+    #print(grid_dict)
     return grid_dict
 
 """----------------------------"""
 
 async def send_to_websocket(json_data):
     async with websockets.connect(deploy_uri, max_size=2**24, compression="deflate") as websocket:
-        print("JSON data received:",json_data)
+        print("JSON data received")
         await websocket.send(wss_listen)
 
         # Maybe here, we can use the mapping markers to data function.
         # This would eliminate the need for the "raw" data type thing we added earlier
         json_str = mapping_markers_to_data(json_data)
         print("JSON str:",json_str)
+        #print(type(json_str))
 
         # Change the table
         updated_grid = json.dumps({"type":"UPDATE_GRID","content":{"geogriddata":json_str}},separators=(',', ':'))
         await websocket.send(updated_grid)
-        print("Updated grid:",updated_grid)
+        #print("Updated grid:",updated_grid)
 
         #await websocket.send(json.dumps(json_str))
         # print("JSON data sent!")
@@ -430,7 +431,7 @@ async def main_detection():
         # Initialize the dictionary to track frequenices and initialize frame counter
         freq_dict = {}
         frame_counter = 1
-        json_counter = 0
+        #json_counter = 0
 
         # Create while loop to always be displaying frame and detecting markers
         while True:

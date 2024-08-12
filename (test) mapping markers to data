@@ -25,8 +25,8 @@ def mapping_markers_to_data(data_file):
     data = data_file.get('Data', [])
     #print(f"Data: {data}")
     markers = data['Marker ID'] # list of IDs
-    print('Markers:',markers)
-    print('------------')
+    #print('Markers:',markers)
+    #print('------------')
 
     codes = codes_file.get('Codes', {})
     #print(f"Codes: {codes}")
