@@ -1,13 +1,5 @@
 import json
 
-"""NOTE: So what we would change here is that we would add a listening part,
-where the json files from the data collector part would be sent THROUGH
-the websocket and we would receive it here.
-
-If DataType == "raw", then we would want to proceed with processing/mapping it
-
-"""
-
 def mapping_markers_to_data(data_file):
     """This processes the data_file (JSON) of markers detected and returns a JSON file of
     info about them (color, height, ID, interactive, name)"""
@@ -18,7 +10,7 @@ def mapping_markers_to_data(data_file):
     #     codes_file = json.load(f2) # This is the 'key' mapping aruco codes to info about them
 
     with open('aruco_codes.json', 'r') as f2:
-        codes_file = json.load(f2)
+        codes_file = json.load(f2) # This is the 'key' mapping aruco codes to info about them
 
     # Extract the aruco ids from JSON file #1
     data = data_file.get('Data', [])
@@ -66,9 +58,3 @@ def mapping_markers_to_data(data_file):
         #input("Enter")
 
     return(mapped_data)
-
-# with open('raw_data/file_0.json', 'r') as f1:
-#     data_file = json.load(f1)
-
-# print(data_file)
-# print(mapping_markers_to_data(data_file))

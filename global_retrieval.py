@@ -6,7 +6,7 @@ table_name = "test"
 deploy_uri = "wss://cityio.media.mit.edu:443/cityio/interface"
 wss_listen = "{\"type\":\"LISTEN\",\"content\":{\"gridId\":\"" + table_name + "\"}}"
 
-async def receive_data():
+async def receive_data(deploy_uri, wss_listen):
     """This connects to the websocket server and collects data from it.
     What we need is number of ROWS, number of COLUMNS, and to make a copy
     of the current geogriddata information."""
